@@ -1,24 +1,26 @@
 # BibliotecaBD (Python + PySide6 + SQL Server)
 
-## Executar em outro computador
+Desktop library management system built with Python (PySide6 + SQL Server), featuring role-based authentication, full CRUD for books/users/loans, and a modern responsive UI.
 
-1. Instale Python 3.11+.
-2. Instale **ODBC Driver 17 for SQL Server**.
-3. Na pasta do projeto, instale dependências:
+## Run on another machine
+
+1. Install Python 3.11+.
+2. Install **ODBC Driver 17 for SQL Server**.
+3. In the project folder, install dependencies:
    - `pip install -r requirements.txt`
-4. Copie `.env.example` para `.env` e ajuste conexão SQL.
-5. Rode:
+4. Copy `.env.example` to `.env` and adjust SQL connection settings.
+5. Run:
    - `python main.py`
 
-## Modos de execução
+## Execution modes
 
-- **SQL Server**: quando conexão estiver válida.
-- **Memória**: fallback automático sem persistência no banco.
-- Para forçar SQL e impedir fallback: `STRICT_SQL=true` no `.env`.
+- **SQL Server**: when database connection is available.
+- **Memory**: automatic fallback when SQL is unavailable.
+- To force SQL mode and disable fallback: set `STRICT_SQL=true` in `.env`.
 
-## Observações
+## Notes
 
-- Banco esperado: `BibliotecaBD` com procedures/triggers do script `database/sql/01_create_biblioteca.sql`.
-- Para o fluxo de pedidos de empréstimo (usuário solicita e bibliotecário aceita), execute também `database/sql/04_pedidos_emprestimo.sql`.
-- Primeiro bibliotecário (bootstrap) só é criado se o banco estiver vazio.
-- Código mestre padrão de bibliotecário: `BIB-2026` (alterável em `BIBLIOTECARIO_CODIGO_MASTER`).
+- Expected DB: `BibliotecaBD` with procedures/triggers from `database/sql/01_create_biblioteca.sql`.
+- For loan-request workflow (user requests, librarian approves), also run `database/sql/04_pedidos_emprestimo.sql`.
+- First librarian (bootstrap) is created only when the database is empty.
+- Default librarian master code: `BIB-2026` (configurable via `BIBLIOTECARIO_CODIGO_MASTER`).
