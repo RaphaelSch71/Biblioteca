@@ -45,6 +45,10 @@ class EmprestimoRepositorySQL(BaseRepository, EmprestimoRepository):
         rows = self._execute("EXEC dbo.usp_ListarEmprestimos", fetch="all")
         return [self._row_to_emprestimo(row) for row in rows]
 
+    def listar_por_usuario(self, usuario_id):
+        emprestimos = self.listar()
+        return [e for e in emprestimos if getattr(e.usuario, "id", None) == int(usuario_id)]
+
     def listar_ativos(self):
         emprestimos = self.listar()
         return [e for e in emprestimos if e.ativo]

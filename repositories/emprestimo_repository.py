@@ -5,6 +5,9 @@ class EmprestimoRepository:
     def listar(self):
         raise NotImplementedError
 
+    def listar_por_usuario(self, usuario_id):
+        raise NotImplementedError
+
     def listar_ativos(self):
         raise NotImplementedError
 

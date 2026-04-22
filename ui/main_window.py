@@ -77,6 +77,8 @@ if QMainWindow is not object:
 
         def eventFilter(self, obj, event):
             if isinstance(obj, QPushButton):
+                if obj.property("skipHoverEffect"):
+                    return super().eventFilter(obj, event)
                 if event.type() == QEvent.Enter and obj.objectName() == "SecondaryButton":
                     self._animar(obj, 16.0)
                 elif event.type() == QEvent.Leave and obj.objectName() == "SecondaryButton":
@@ -305,6 +307,8 @@ if QMainWindow is not object:
             self.lbl_live_status.setObjectName("TopBarClock")
             self.btn_toggle_sidebar = QPushButton("Recolher menu")
             self.btn_toggle_sidebar.setObjectName("SecondaryButton")
+            self.btn_toggle_sidebar.setProperty("skipHoverEffect", True)
+            self.btn_toggle_sidebar.setFixedWidth(150)
             self._set_icon(self.btn_toggle_sidebar, "menu.svg", QStyle.SP_TitleBarMenuButton)
             self.btn_toggle_sidebar.clicked.connect(self._toggle_sidebar)
             lay.addWidget(t); lay.addWidget(s); lay.addWidget(self.btn_toggle_sidebar); lay.addStretch(1); lay.addWidget(self.lbl_live_status); lay.addWidget(lbl_user); lay.addWidget(lbl_role); lay.addWidget(self.lbl_clock)
@@ -457,13 +461,20 @@ if QMainWindow is not object:
             chart_desc.setObjectName("InfoCardBody")
             chart_desc.setWordWrap(True)
 
-            chart_btns = QHBoxLayout()
+            chart_btns = QGridLayout()
             self.btn_chart_livros = QPushButton("Acervo")
             self.btn_chart_emprestimos = QPushButton("Empréstimos")
             self.btn_chart_usuarios = QPushButton("Usuários")
             for btn in (self.btn_chart_livros, self.btn_chart_emprestimos, self.btn_chart_usuarios):
                 btn.setObjectName("SecondaryButton")
-                chart_btns.addWidget(btn)
+                btn.setMinimumHeight(34)
+                btn.setMinimumWidth(120)
+
+            chart_btns.setHorizontalSpacing(8)
+            chart_btns.setVerticalSpacing(8)
+            chart_btns.addWidget(self.btn_chart_livros, 0, 0)
+            chart_btns.addWidget(self.btn_chart_emprestimos, 0, 1)
+            chart_btns.addWidget(self.btn_chart_usuarios, 0, 2)
 
             self.chart_summary_title = QLabel("")
             self.chart_summary_title.setObjectName("InfoCardTitle")
@@ -502,8 +513,9 @@ if QMainWindow is not object:
             emps = self.biblioteca_service.listar_emprestimos(self.usuario_logado) if self._pode_gerenciar_emprestimos() else []
             ativos = len([e for e in emps if e.ativo])
             devolvidos = len([e for e in emps if not e.ativo])
-            users = len(self.biblioteca_service.listar_usuarios(self.usuario_logado)) if self._pode_gerenciar_usuarios() else 0
-            bibliotecarios = len([u for u in self.biblioteca_service.listar_usuarios(self.usuario_logado) if isinstance(u, Bibliotecario)]) if self._pode_gerenciar_usuarios() else 0
+            usuarios_total = self.biblioteca_service.usuario_repository.listar()
+            users = len(usuarios_total)
+            bibliotecarios = len([u for u in usuarios_total if isinstance(u, Bibliotecario)])
             leitores = max(0, users - bibliotecarios)
 
             if mode == "emprestimos":
@@ -644,6 +656,19 @@ if QMainWindow is not object:
 
             # Pedido de empréstimo pelo usuário comum
             if not isinstance(self.usuario_logado, Bibliotecario):
+                card_loans = QFrame(); card_loans.setObjectName("InsightCard")
+                ll = QVBoxLayout(card_loans); ll.setContentsMargins(18, 18, 18, 18); ll.setSpacing(10)
+                ll.addWidget(QLabel("📚 Meus empréstimos"))
+
+                self.tbl_meus_emprestimos = QTableWidget(0, 6)
+                self.tbl_meus_emprestimos.setHorizontalHeaderLabels(["ID", "Livro", "Empréstimo", "Devolução", "Ativo", "Status"])
+                self.tbl_meus_emprestimos.setSelectionBehavior(QAbstractItemView.SelectRows)
+                self.tbl_meus_emprestimos.setEditTriggers(QAbstractItemView.NoEditTriggers)
+                self.tbl_meus_emprestimos.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+                ll.addWidget(self.tbl_meus_emprestimos)
+                lay.addWidget(card_loans)
+
                 card_user = QFrame(); card_user.setObjectName("InsightCard")
                 lu = QVBoxLayout(card_user); lu.setContentsMargins(18, 18, 18, 18); lu.setSpacing(10)
                 lu.addWidget(QLabel("📨 Solicitar empréstimo"))
@@ -845,6 +870,17 @@ if QMainWindow is not object:
                         self._pedidos_notificados.add(p.get("id"))
                     QMessageBox.information(self, "Pedido aceito", msg)
 
+            if hasattr(self, "tbl_meus_emprestimos"):
+                emprestimos = self.biblioteca_service.listar_meus_emprestimos(self.usuario_logado)
+                self.tbl_meus_emprestimos.setRowCount(len(emprestimos))
+                for r, e in enumerate(emprestimos):
+                    self._cell(self.tbl_meus_emprestimos, r, 0, e.id)
+                    self._cell(self.tbl_meus_emprestimos, r, 1, e.livro.titulo)
+                    self._cell(self.tbl_meus_emprestimos, r, 2, e.data_emprestimo)
+                    self._cell(self.tbl_meus_emprestimos, r, 3, e.data_devolucao)
+                    self._cell(self.tbl_meus_emprestimos, r, 4, "Sim" if e.ativo else "Não")
+                    self._cell(self.tbl_meus_emprestimos, r, 5, "Em aberto" if e.ativo else "Encerrado")
+
             # Bibliotecário: fila pendente
             if hasattr(self, "tbl_pedidos_pendentes"):
                 pendentes = self.biblioteca_service.listar_pedidos_pendentes(self.usuario_logado)
@@ -992,8 +1028,11 @@ if QMainWindow is not object:
         def refresh_dashboard(self):
             livros = self.biblioteca_service.listar_livros(self.usuario_logado)
             total_livros = len(livros); disp = len([l for l in livros if l.disponivel])
-            users = len(self.biblioteca_service.listar_usuarios(self.usuario_logado)) if self._pode_gerenciar_usuarios() else 0
-            loans = len([e for e in self.biblioteca_service.listar_emprestimos(self.usuario_logado) if e.ativo]) if self._pode_gerenciar_emprestimos() else 0
+            users = len(self.biblioteca_service.usuario_repository.listar())
+            if self._pode_gerenciar_emprestimos():
+                loans = len([e for e in self.biblioteca_service.listar_emprestimos(self.usuario_logado) if e.ativo])
+            else:
+                loans = len([e for e in self.biblioteca_service.listar_meus_emprestimos(self.usuario_logado) if e.ativo])
             self.lbl_dash_books.setText(str(total_livros)); self.lbl_dash_available.setText(str(disp)); self.lbl_dash_users.setText(str(users)); self.lbl_dash_loans.setText(str(loans))
 
             disponibilidade = (disp / total_livros * 100) if total_livros else 0

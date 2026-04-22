@@ -15,6 +15,9 @@ class EmprestimoRepositoryMemoria(EmprestimoRepository):
     def listar(self):
         return self.emprestimos
 
+    def listar_por_usuario(self, usuario_id):
+        return [e for e in self.emprestimos if getattr(e.usuario, "id", None) == int(usuario_id)]
+
     def listar_ativos(self):
         return [e for e in self.emprestimos if e.data_devolucao is None]
 

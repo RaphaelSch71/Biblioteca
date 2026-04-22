@@ -136,6 +136,16 @@ class BibliotecaService:
             raise PermissaoNegadaError()
         return self.emprestimo_repository.listar()
 
+    def listar_meus_emprestimos(self, usuario):
+        if not usuario.tem_permissao(Permissao.LISTAR_LIVROS):
+            raise PermissaoNegadaError()
+
+        if hasattr(self.emprestimo_repository, "listar_por_usuario"):
+            return self.emprestimo_repository.listar_por_usuario(usuario.id)
+
+        emprestimos = self.emprestimo_repository.listar()
+        return [e for e in emprestimos if getattr(e.usuario, "id", None) == getattr(usuario, "id", None)]
+
     def atualizar_emprestimo(self, funcionario, emprestimo):
         if not funcionario.tem_permissao(Permissao.GERENCIAR_EMPRESTIMOS):
             raise PermissaoNegadaError()
