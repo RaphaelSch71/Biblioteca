@@ -1,0 +1,17 @@
+-- Biblioteca - script opcional para inserção manual de dados
+-- Execute este arquivo apenas quando quiser cadastrar registros iniciais no SSMS 22.
+--
+-- USE BibliotecaBD;
+-- GO
+--
+-- INSERT INTO dbo.Usuarios (Nome, Matricula, Senha, Tipo)
+-- VALUES (N'Nome', N'MATRICULA', N'SENHA', N'usuario');
+-- GO
+--
+-- INSERT INTO dbo.Usuarios (Nome, Matricula, Senha, Tipo)
+-- VALUES ('Raphael', 'B002','Admin#2101', 'Bibliotecario');
+-- GO
+--
+-- INSERT INTO dbo.Livros (Titulo, Autor, ISBN, AnoPublicacao, Disponivel)
+-- VALUES (N'Título', N'Autor', N'ISBN', 2026, 1);
+-- GO

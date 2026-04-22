@@ -1,0 +1,3 @@
+from repositories.sql.usuario_repository_sql import UsuarioRepositorySQL
+from repositories.sql.livro_repository_sql import LivroRepositorySQL
+from repositories.sql.emprestimo_repository_sql import EmprestimoRepositorySQL
