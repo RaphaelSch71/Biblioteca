@@ -298,12 +298,13 @@ QPushButton#NavButton:pressed {
 }
 
 QPushButton#SecondaryButton {
-    background: #18243D;
-    color: #DCE6FF;
+    background: #22375D;
+    color: #F3F7FF;
+    border: 1px solid #3E5F97;
 }
 
 QPushButton#SecondaryButton:hover {
-    background: #223155;
+    background: #2E4776;
 }
 
 QPushButton#DangerButton {
@@ -316,11 +317,13 @@ QPushButton#DangerButton:hover {
 }
 
 QPushButton#NavButton {
-    background: transparent;
-    color: #D8E2FF;
+    background: #111F39;
+    color: #EEF4FF;
     text-align: left;
     padding: 12px 16px;
     border-radius: 12px;
+    border: 1px solid #223A62;
+    font-weight: 700;
 }
 
 QPushButton#NavButton[compact="true"] {
@@ -329,11 +332,11 @@ QPushButton#NavButton[compact="true"] {
 }
 
 QPushButton#NavButton:hover {
-    background: #1A2742;
+    background: #1E3054;
 }
 
 QPushButton#NavButton[compact="true"]:hover {
-    background: #203254;
+    background: #27406C;
 }
 
 QPushButton#NavButton[active="true"] {

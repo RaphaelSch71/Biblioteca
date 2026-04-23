@@ -39,7 +39,7 @@ except ImportError:  # pragma: no cover
 from models.bibliotecario import Bibliotecario
 from models.livro import Livro
 from models.usuario import Usuario
-from ui.styles import APP_QSS
+from ui.styles import APP_QSS, LIGHT_QSS
 
 ICON_DIR = Path(__file__).resolve().parent / "assets" / "icons"
 
@@ -100,6 +100,8 @@ if QMainWindow is not object:
             self._nav_buttons = []
             self._page_anim = None
             self._chart_mode = "livros"
+            app_qss = QApplication.instance().styleSheet() if QApplication.instance() else ""
+            self._tema_claro_ativo = app_qss.strip() == LIGHT_QSS.strip()
 
             project_root = Path(__file__).resolve().parents[1]
             icon_path = project_root / "biblioteca.ico"
@@ -115,7 +117,6 @@ if QMainWindow is not object:
             self.setWindowTitle("BibliotecaBD | Painel Principal")
             self.setObjectName("MainWindow")
             self.resize(1360, 840)
-            app_qss = QApplication.instance().styleSheet() if QApplication.instance() else ""
             self.setStyleSheet(app_qss or APP_QSS)
 
             root = QWidget()
@@ -170,6 +171,25 @@ if QMainWindow is not object:
             p = ICON_DIR / file_name
             button.setIcon(QIcon(str(p)) if p.exists() else self.style().standardIcon(fallback))
             button.setIconSize(QSize(16, 16))
+
+        def _aplicar_tema(self, claro: bool):
+            tema = LIGHT_QSS if claro else APP_QSS
+            app = QApplication.instance()
+            if app is not None:
+                app.setStyleSheet(tema)
+            self.setStyleSheet(tema)
+            self._tema_claro_ativo = claro
+            self._atualizar_botoes_tema()
+
+        def _atualizar_botoes_tema(self):
+            if not hasattr(self, "btn_tema_claro") or not hasattr(self, "btn_tema_noturno"):
+                return
+
+            self.btn_tema_claro.setObjectName("PrimaryButton" if self._tema_claro_ativo else "SecondaryButton")
+            self.btn_tema_noturno.setObjectName("PrimaryButton" if not self._tema_claro_ativo else "SecondaryButton")
+            for botao in (self.btn_tema_claro, self.btn_tema_noturno):
+                botao.style().unpolish(botao)
+                botao.style().polish(botao)
 
         def _apply_shadow(self, widget: QWidget, blur=32, y=8, alpha=70):
             effect = QGraphicsDropShadowEffect(self)
@@ -319,10 +339,22 @@ if QMainWindow is not object:
             self.btn_toggle_sidebar.setFixedWidth(150)
             self._set_icon(self.btn_toggle_sidebar, "menu.svg", QStyle.SP_TitleBarMenuButton)
             self.btn_toggle_sidebar.clicked.connect(self._toggle_sidebar)
-            lay.addWidget(t); lay.addWidget(s); lay.addWidget(self.btn_toggle_sidebar); lay.addStretch(1); lay.addWidget(self.lbl_live_status); lay.addWidget(lbl_user); lay.addWidget(lbl_role); lay.addWidget(self.lbl_clock)
+
+            self.btn_tema_claro = QPushButton("Tema claro")
+            self.btn_tema_claro.setObjectName("PrimaryButton" if self._tema_claro_ativo else "SecondaryButton")
+            self.btn_tema_claro.setFixedWidth(100)
+            self.btn_tema_claro.clicked.connect(lambda: self._aplicar_tema(True))
+
+            self.btn_tema_noturno = QPushButton("Tema noturno")
+            self.btn_tema_noturno.setObjectName("PrimaryButton" if not self._tema_claro_ativo else "SecondaryButton")
+            self.btn_tema_noturno.setFixedWidth(110)
+            self.btn_tema_noturno.clicked.connect(lambda: self._aplicar_tema(False))
+
+            lay.addWidget(t); lay.addWidget(s); lay.addWidget(self.btn_toggle_sidebar); lay.addWidget(self.btn_tema_claro); lay.addWidget(self.btn_tema_noturno); lay.addStretch(1); lay.addWidget(self.lbl_live_status); lay.addWidget(lbl_user); lay.addWidget(lbl_role); lay.addWidget(self.lbl_clock)
             self._apply_shadow(b, blur=20, y=5, alpha=45)
             self._timer = QTimer(self); self._timer.timeout.connect(lambda: self.lbl_clock.setText(QDateTime.currentDateTime().toString("dd/MM/yyyy HH:mm:ss"))); self._timer.start(1000)
             self.lbl_clock.setText(QDateTime.currentDateTime().toString("dd/MM/yyyy HH:mm:ss"))
+            self._atualizar_botoes_tema()
             return b
 
         def _page(self, title, subtitle):
