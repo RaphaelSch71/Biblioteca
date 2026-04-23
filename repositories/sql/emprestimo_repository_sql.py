@@ -10,12 +10,21 @@ class EmprestimoRepositorySQL(BaseRepository, EmprestimoRepository):
         super().__init__()
 
     def salvar(self, emprestimo):
-        row = self._execute(
-            "EXEC dbo.usp_RealizarEmprestimo @LivroId=?, @UsuarioId=?",
-            (emprestimo.livro.id, emprestimo.usuario.id),
-            fetch="one",
-            commit=True,
-        )
+        try:
+            row = self._execute(
+                "EXEC dbo.usp_RealizarEmprestimo @LivroId=?, @UsuarioId=?, @DataPrevistaDevolucao=?",
+                (emprestimo.livro.id, emprestimo.usuario.id, emprestimo.data_prevista_devolucao),
+                fetch="one",
+                commit=True,
+            )
+        except Exception as e:
+            msg = str(e).lower()
+            if "dataprevistadevolucao" in msg or "many arguments" in msg or "muitos argumentos" in msg:
+                raise Exception(
+                    "Banco desatualizado para data prevista de devolução. "
+                    "Execute os scripts SQL 01_create_biblioteca.sql e 04_pedidos_emprestimo.sql novamente."
+                ) from e
+            raise
 
         if row:
             emprestimo.id = int(row[0])
@@ -24,8 +33,9 @@ class EmprestimoRepositorySQL(BaseRepository, EmprestimoRepository):
         emprestimo.ativo = True
         return emprestimo
 
-    def realizar_emprestimo(self, livro, usuario):
+    def realizar_emprestimo(self, livro, usuario, data_prevista_devolucao=None):
         emprestimo = Emprestimo(livro, usuario)
+        emprestimo.data_prevista_devolucao = data_prevista_devolucao
         return self.salvar(emprestimo)
 
     def devolver_emprestimo(self, emprestimo):
@@ -60,16 +70,26 @@ class EmprestimoRepositorySQL(BaseRepository, EmprestimoRepository):
         return self._row_to_emprestimo(row)
 
     def atualizar(self, emprestimo):
-        self._execute(
-            "EXEC dbo.usp_AtualizarEmprestimo @Id=?, @DataEmprestimo=?, @DataDevolucao=?, @Ativo=?",
-            (
-                emprestimo.id,
-                emprestimo.data_emprestimo,
-                emprestimo.data_devolucao,
-                int(emprestimo.ativo),
-            ),
-            commit=True,
-        )
+        try:
+            self._execute(
+                "EXEC dbo.usp_AtualizarEmprestimo @Id=?, @DataEmprestimo=?, @DataPrevistaDevolucao=?, @DataDevolucao=?, @Ativo=?",
+                (
+                    emprestimo.id,
+                    emprestimo.data_emprestimo,
+                    emprestimo.data_prevista_devolucao,
+                    emprestimo.data_devolucao,
+                    int(emprestimo.ativo),
+                ),
+                commit=True,
+            )
+        except Exception as e:
+            msg = str(e).lower()
+            if "dataprevistadevolucao" in msg or "many arguments" in msg or "muitos argumentos" in msg:
+                raise Exception(
+                    "Banco desatualizado para data prevista de devolução. "
+                    "Execute os scripts SQL 01_create_biblioteca.sql e 04_pedidos_emprestimo.sql novamente."
+                ) from e
+            raise
         return emprestimo
 
     def remover(self, emprestimo_id):
@@ -77,9 +97,14 @@ class EmprestimoRepositorySQL(BaseRepository, EmprestimoRepository):
         return True
 
     def _row_to_emprestimo(self, row):
-        # Row: Id, LivroId, Titulo, ISBN, UsuarioId, NomeUsuario, Matricula, DataEmprestimo, DataDevolucao, Ativo
+        # Row novo: Id, LivroId, Titulo, ISBN, UsuarioId, NomeUsuario, Matricula,
+        #           DataEmprestimo, DataPrevistaDevolucao, DataDevolucao, Ativo
+        # Row legado: Id, LivroId, Titulo, ISBN, UsuarioId, NomeUsuario, Matricula,
+        #             DataEmprestimo, DataDevolucao, Ativo
         livro = Livro(row[1], row[2], "", row[3], None)
-        livro.disponivel = not bool(row[9])
+        row_len = len(row)
+        ativo_idx = 10 if row_len >= 11 else 9
+        livro.disponivel = not bool(row[ativo_idx])
 
         usuario = Usuario(row[5], row[6], "")
         usuario.id = int(row[4])
@@ -87,6 +112,12 @@ class EmprestimoRepositorySQL(BaseRepository, EmprestimoRepository):
         emprestimo = Emprestimo(livro, usuario)
         emprestimo.id = int(row[0])
         emprestimo.data_emprestimo = row[7]
-        emprestimo.data_devolucao = row[8]
-        emprestimo.ativo = bool(row[9])
+        if row_len >= 11:
+            emprestimo.data_prevista_devolucao = row[8]
+            emprestimo.data_devolucao = row[9]
+            emprestimo.ativo = bool(row[10])
+        else:
+            emprestimo.data_prevista_devolucao = None
+            emprestimo.data_devolucao = row[8]
+            emprestimo.ativo = bool(row[9])
         return emprestimo

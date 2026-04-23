@@ -55,12 +55,49 @@ BEGIN
         LivroId INT NOT NULL,
         UsuarioId INT NOT NULL,
         DataEmprestimo DATE NOT NULL CONSTRAINT DF_Emprestimos_DataEmprestimo DEFAULT (CAST(GETDATE() AS DATE)),
+        DataPrevistaDevolucao DATE NULL,
         DataDevolucao DATE NULL,
         Ativo BIT NOT NULL CONSTRAINT DF_Emprestimos_Ativo DEFAULT (1),
         CONSTRAINT FK_Emprestimos_Livros FOREIGN KEY (LivroId) REFERENCES dbo.Livros (Id),
         CONSTRAINT FK_Emprestimos_Usuarios FOREIGN KEY (UsuarioId) REFERENCES dbo.Usuarios (Id),
-        CONSTRAINT CK_Emprestimos_Datas CHECK (DataDevolucao IS NULL OR DataDevolucao >= DataEmprestimo)
+        CONSTRAINT CK_Emprestimos_Datas CHECK (
+            (DataDevolucao IS NULL OR DataDevolucao >= DataEmprestimo)
+            AND (DataPrevistaDevolucao IS NULL OR DataPrevistaDevolucao >= DataEmprestimo)
+        )
     );
+END
+GO
+
+IF COL_LENGTH(N'dbo.Emprestimos', N'DataPrevistaDevolucao') IS NULL
+BEGIN
+    ALTER TABLE dbo.Emprestimos
+        ADD DataPrevistaDevolucao DATE NULL;
+END
+GO
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = N'CK_Emprestimos_Datas'
+      AND parent_object_id = OBJECT_ID(N'dbo.Emprestimos')
+)
+BEGIN
+    ALTER TABLE dbo.Emprestimos DROP CONSTRAINT CK_Emprestimos_Datas;
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = N'CK_Emprestimos_Datas'
+      AND parent_object_id = OBJECT_ID(N'dbo.Emprestimos')
+)
+BEGIN
+    ALTER TABLE dbo.Emprestimos
+        WITH CHECK ADD CONSTRAINT CK_Emprestimos_Datas CHECK (
+            (DataDevolucao IS NULL OR DataDevolucao >= DataEmprestimo)
+            AND (DataPrevistaDevolucao IS NULL OR DataPrevistaDevolucao >= DataEmprestimo)
+        );
 END
 GO
 
@@ -113,7 +150,8 @@ SELECT
     e.UsuarioId,
     u.Nome AS NomeUsuario,
     u.Matricula,
-    e.DataEmprestimo
+    e.DataEmprestimo,
+    e.DataPrevistaDevolucao
 FROM dbo.Emprestimos e
 INNER JOIN dbo.Livros l ON l.Id = e.LivroId
 INNER JOIN dbo.Usuarios u ON u.Id = e.UsuarioId
@@ -163,11 +201,17 @@ GO
 
 CREATE OR ALTER PROCEDURE dbo.usp_RealizarEmprestimo
     @LivroId INT,
-    @UsuarioId INT
+    @UsuarioId INT,
+    @DataPrevistaDevolucao DATE = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+
+    DECLARE @DataEmprestimo DATE = CAST(GETDATE() AS DATE);
+
+    IF @DataPrevistaDevolucao IS NOT NULL AND @DataPrevistaDevolucao < @DataEmprestimo
+        THROW 50033, 'Data prevista de devolução não pode ser menor que a data do empréstimo.', 1;
 
     BEGIN TRAN;
 
@@ -180,8 +224,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM dbo.Emprestimos WHERE LivroId = @LivroId AND Ativo = 1)
         THROW 50032, 'Livro já possui empréstimo ativo.', 1;
 
-    INSERT INTO dbo.Emprestimos (LivroId, UsuarioId, DataEmprestimo, DataDevolucao, Ativo)
-    VALUES (@LivroId, @UsuarioId, CAST(GETDATE() AS DATE), NULL, 1);
+    INSERT INTO dbo.Emprestimos (LivroId, UsuarioId, DataEmprestimo, DataPrevistaDevolucao, DataDevolucao, Ativo)
+    VALUES (@LivroId, @UsuarioId, @DataEmprestimo, @DataPrevistaDevolucao, NULL, 1);
 
     UPDATE dbo.Livros
        SET Disponivel = 0
@@ -448,6 +492,7 @@ BEGIN
         u.Nome AS NomeUsuario,
         u.Matricula,
         e.DataEmprestimo,
+        e.DataPrevistaDevolucao,
         e.DataDevolucao,
         e.Ativo
     FROM dbo.Emprestimos e
@@ -472,6 +517,7 @@ BEGIN
         u.Nome AS NomeUsuario,
         u.Matricula,
         e.DataEmprestimo,
+        e.DataPrevistaDevolucao,
         e.DataDevolucao,
         e.Ativo
     FROM dbo.Emprestimos e
@@ -484,11 +530,15 @@ GO
 CREATE OR ALTER PROCEDURE dbo.usp_AtualizarEmprestimo
     @Id INT,
     @DataEmprestimo DATE,
+    @DataPrevistaDevolucao DATE = NULL,
     @DataDevolucao DATE = NULL,
     @Ativo BIT
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF @DataPrevistaDevolucao IS NOT NULL AND @DataPrevistaDevolucao < @DataEmprestimo
+        THROW 50309, 'Data prevista de devolução não pode ser menor que a data de empréstimo.', 1;
 
     IF @DataDevolucao IS NOT NULL AND @DataDevolucao < @DataEmprestimo
         THROW 50310, 'Data de devolução não pode ser menor que a data de empréstimo.', 1;
@@ -501,6 +551,7 @@ BEGIN
 
     UPDATE dbo.Emprestimos
        SET DataEmprestimo = @DataEmprestimo,
+           DataPrevistaDevolucao = @DataPrevistaDevolucao,
            DataDevolucao = @DataDevolucao,
            Ativo = @Ativo
      WHERE Id = @Id;
@@ -564,8 +615,19 @@ BEGIN
             ELSE N'UPDATE'
         END,
         CASE
-            WHEN d.Id IS NULL THEN CONCAT(N'LivroId=', i.LivroId, N'; UsuarioId=', i.UsuarioId, N'; Ativo=', i.Ativo)
-            ELSE CONCAT(N'LivroId=', i.LivroId, N'; UsuarioId=', i.UsuarioId, N'; Ativo=', i.Ativo, N'; DataDevolucao=', COALESCE(CONVERT(NVARCHAR(30), i.DataDevolucao, 23), N'NULL'))
+            WHEN d.Id IS NULL THEN CONCAT(
+                N'LivroId=', i.LivroId,
+                N'; UsuarioId=', i.UsuarioId,
+                N'; Ativo=', i.Ativo,
+                N'; DataPrevistaDevolucao=', COALESCE(CONVERT(NVARCHAR(30), i.DataPrevistaDevolucao, 23), N'NULL')
+            )
+            ELSE CONCAT(
+                N'LivroId=', i.LivroId,
+                N'; UsuarioId=', i.UsuarioId,
+                N'; Ativo=', i.Ativo,
+                N'; DataPrevistaDevolucao=', COALESCE(CONVERT(NVARCHAR(30), i.DataPrevistaDevolucao, 23), N'NULL'),
+                N'; DataDevolucao=', COALESCE(CONVERT(NVARCHAR(30), i.DataDevolucao, 23), N'NULL')
+            )
         END
     FROM inserted i
     LEFT JOIN deleted d ON d.Id = i.Id;
@@ -633,7 +695,7 @@ GO
 -- ==============================
 -- EXEC dbo.usp_CadastrarUsuario @Nome = N'Ana', @Matricula = N'U100', @Senha = N'123', @Tipo = N'usuario';
 -- EXEC dbo.usp_CadastrarLivro @Titulo = N'Domain-Driven Design', @Autor = N'Eric Evans', @ISBN = N'9780321125217', @AnoPublicacao = 2003;
--- EXEC dbo.usp_RealizarEmprestimo @LivroId = 1, @UsuarioId = 1;
+-- EXEC dbo.usp_RealizarEmprestimo @LivroId = 1, @UsuarioId = 1, @DataPrevistaDevolucao = '2026-05-01';
 -- EXEC dbo.usp_DevolverLivro @EmprestimoId = 1;
 -- EXEC dbo.usp_ListarLivros;
 -- EXEC dbo.usp_ListarUsuarios;
@@ -645,7 +707,7 @@ GO
 -- EXEC dbo.usp_ObterEmprestimoPorId @Id = 1;
 -- EXEC dbo.usp_AtualizarUsuario @Id = 1, @Nome = N'Ana Silva', @Matricula = N'U100', @Senha = N'123', @Tipo = N'usuario', @Ativo = 1;
 -- EXEC dbo.usp_AtualizarLivro @Id = 1, @Titulo = N'DDD', @Autor = N'Eric Evans', @ISBN = N'9780321125217', @AnoPublicacao = 2003;
--- EXEC dbo.usp_AtualizarEmprestimo @Id = 1, @DataEmprestimo = '2026-04-09', @DataDevolucao = NULL, @Ativo = 1;
+-- EXEC dbo.usp_AtualizarEmprestimo @Id = 1, @DataEmprestimo = '2026-04-09', @DataPrevistaDevolucao = '2026-04-20', @DataDevolucao = NULL, @Ativo = 1;
 -- EXEC dbo.usp_RemoverEmprestimo @Id = 99;
 -- EXEC dbo.usp_RemoverLivro @Id = 99;
 -- EXEC dbo.usp_RemoverUsuario @Id = 99;

@@ -210,9 +210,16 @@ if QMainWindow is not object:
             try:
                 if not self._confirm("Encerrar sessão", "Deseja sair da conta e voltar para o login?"):
                     return
-                if callable(self.on_logout):
-                    self.on_logout()
+                if hasattr(self, "_timer_pedidos") and self._timer_pedidos.isActive():
+                    self._timer_pedidos.stop()
+                if hasattr(self, "_timer") and self._timer.isActive():
+                    self._timer.stop()
+
+                callback_logout = self.on_logout if callable(self.on_logout) else None
+                self.hide()
                 self.close()
+                if callback_logout is not None:
+                    QTimer.singleShot(0, callback_logout)
             except Exception as e:
                 self._err(str(e))
 
@@ -619,8 +626,9 @@ if QMainWindow is not object:
             self.emprestimo_id = QLineEdit(); self.emprestimo_id.setReadOnly(True)
             self.combo_livro = QComboBox(); self.combo_usuario = QComboBox()
             self.emprestimo_data = QDateEdit(); self.emprestimo_data.setCalendarPopup(True); self.emprestimo_data.setDate(QDate.currentDate())
+            self.emprestimo_data_prevista = QDateEdit(); self.emprestimo_data_prevista.setCalendarPopup(True); self.emprestimo_data_prevista.setDate(QDate.currentDate().addDays(7))
             self.emprestimo_ativo = QComboBox(); self.emprestimo_ativo.addItems(["Sim", "Não"])
-            for k, w in [("ID", self.emprestimo_id), ("Livro", self.combo_livro), ("Usuário", self.combo_usuario), ("Data", self.emprestimo_data), ("Ativo", self.emprestimo_ativo)]:
+            for k, w in [("ID", self.emprestimo_id), ("Livro", self.combo_livro), ("Usuário", self.combo_usuario), ("Data", self.emprestimo_data), ("Prev. devolução", self.emprestimo_data_prevista), ("Ativo", self.emprestimo_ativo)]:
                 form.addRow(k, w)
             btns = QVBoxLayout()
             for txt, obj, icon, cb in [
@@ -633,8 +641,8 @@ if QMainWindow is not object:
             btns.addStretch(1)
             row.addLayout(form, 2); row.addLayout(btns, 1)
 
-            self.tbl_emprestimos = QTableWidget(0, 8)
-            self.tbl_emprestimos.setHorizontalHeaderLabels(["ID", "Livro", "ISBN", "Usuário", "Matrícula", "Empréstimo", "Devolução", "Ativo"])
+            self.tbl_emprestimos = QTableWidget(0, 9)
+            self.tbl_emprestimos.setHorizontalHeaderLabels(["ID", "Livro", "ISBN", "Usuário", "Matrícula", "Empréstimo", "Prev. devolução", "Devolução", "Ativo"])
             self.tbl_emprestimos.setSelectionBehavior(QAbstractItemView.SelectRows); self.tbl_emprestimos.setEditTriggers(QAbstractItemView.NoEditTriggers)
             self.tbl_emprestimos.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             self.tbl_emprestimos.itemSelectionChanged.connect(self.preencher_emprestimo_form)
@@ -660,8 +668,8 @@ if QMainWindow is not object:
                 ll = QVBoxLayout(card_loans); ll.setContentsMargins(18, 18, 18, 18); ll.setSpacing(10)
                 ll.addWidget(QLabel("📚 Meus empréstimos"))
 
-                self.tbl_meus_emprestimos = QTableWidget(0, 6)
-                self.tbl_meus_emprestimos.setHorizontalHeaderLabels(["ID", "Livro", "Empréstimo", "Devolução", "Ativo", "Status"])
+                self.tbl_meus_emprestimos = QTableWidget(0, 7)
+                self.tbl_meus_emprestimos.setHorizontalHeaderLabels(["ID", "Livro", "Empréstimo", "Prev. devolução", "Devolução", "Ativo", "Status"])
                 self.tbl_meus_emprestimos.setSelectionBehavior(QAbstractItemView.SelectRows)
                 self.tbl_meus_emprestimos.setEditTriggers(QAbstractItemView.NoEditTriggers)
                 self.tbl_meus_emprestimos.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -877,9 +885,10 @@ if QMainWindow is not object:
                     self._cell(self.tbl_meus_emprestimos, r, 0, e.id)
                     self._cell(self.tbl_meus_emprestimos, r, 1, e.livro.titulo)
                     self._cell(self.tbl_meus_emprestimos, r, 2, e.data_emprestimo)
-                    self._cell(self.tbl_meus_emprestimos, r, 3, e.data_devolucao)
-                    self._cell(self.tbl_meus_emprestimos, r, 4, "Sim" if e.ativo else "Não")
-                    self._cell(self.tbl_meus_emprestimos, r, 5, "Em aberto" if e.ativo else "Encerrado")
+                    self._cell(self.tbl_meus_emprestimos, r, 3, getattr(e, "data_prevista_devolucao", None))
+                    self._cell(self.tbl_meus_emprestimos, r, 4, e.data_devolucao)
+                    self._cell(self.tbl_meus_emprestimos, r, 5, "Sim" if e.ativo else "Não")
+                    self._cell(self.tbl_meus_emprestimos, r, 6, "Em aberto" if e.ativo else "Encerrado")
 
             # Bibliotecário: fila pendente
             if hasattr(self, "tbl_pedidos_pendentes"):
@@ -988,19 +997,32 @@ if QMainWindow is not object:
                 self._err(str(e))
 
         def limpar_emprestimo_form(self):
-            self.emprestimo_id.clear(); self.emprestimo_data.setDate(QDate.currentDate()); self.emprestimo_ativo.setCurrentIndex(0)
+            self.emprestimo_id.clear(); self.emprestimo_data.setDate(QDate.currentDate()); self.emprestimo_data_prevista.setDate(QDate.currentDate().addDays(7)); self.emprestimo_ativo.setCurrentIndex(0)
             if self.combo_livro.count(): self.combo_livro.setCurrentIndex(0)
             if self.combo_usuario.count(): self.combo_usuario.setCurrentIndex(0)
 
         def preencher_emprestimo_form(self):
             r = self.tbl_emprestimos.currentRow()
-            if r >= 0: self.emprestimo_id.setText(self.tbl_emprestimos.item(r, 0).text())
+            if r < 0:
+                return
+
+            self.emprestimo_id.setText(self.tbl_emprestimos.item(r, 0).text())
+            texto_data_prevista = self.tbl_emprestimos.item(r, 6).text().strip()
+            data_prevista = QDate.fromString(texto_data_prevista, Qt.DateFormat.ISODate)
+            if not data_prevista.isValid():
+                data_prevista = QDate.currentDate().addDays(7)
+            self.emprestimo_data_prevista.setDate(data_prevista)
 
         def salvar_emprestimo(self):
             try:
                 l = self.combo_livro.currentData(); u = self.combo_usuario.currentData()
                 if l is None or u is None: raise ValueError("Selecione livro e usuário.")
-                self.biblioteca_service.realizar_emprestimo(self.usuario_logado, l, u)
+                self.biblioteca_service.realizar_emprestimo(
+                    self.usuario_logado,
+                    l,
+                    u,
+                    self.emprestimo_data_prevista.date().toPython(),
+                )
                 self.refresh_all(); self._ok("Empréstimo realizado com sucesso.")
             except Exception as e:
                 self._err(str(e))
@@ -1086,7 +1108,7 @@ if QMainWindow is not object:
                 self._cell(self.tbl_emprestimos, r, 0, e.id); self._cell(self.tbl_emprestimos, r, 1, e.livro.titulo)
                 self._cell(self.tbl_emprestimos, r, 2, e.livro.isbn); self._cell(self.tbl_emprestimos, r, 3, e.usuario.nome)
                 self._cell(self.tbl_emprestimos, r, 4, e.usuario.matricula); self._cell(self.tbl_emprestimos, r, 5, e.data_emprestimo)
-                self._cell(self.tbl_emprestimos, r, 6, e.data_devolucao); self._cell(self.tbl_emprestimos, r, 7, "Sim" if e.ativo else "Não")
+                self._cell(self.tbl_emprestimos, r, 6, getattr(e, "data_prevista_devolucao", None)); self._cell(self.tbl_emprestimos, r, 7, e.data_devolucao); self._cell(self.tbl_emprestimos, r, 8, "Sim" if e.ativo else "Não")
 
         def refresh_relatorios(self):
             livros = self.biblioteca_service.listar_livros(self.usuario_logado)

@@ -44,14 +44,15 @@ class BibliotecaService:
 
         return self.livro_repository.listar()
     
-    def realizar_emprestimo(self, funcionario, livro, usuario):
+    def realizar_emprestimo(self, funcionario, livro, usuario, data_prevista_devolucao=None):
         if not funcionario.tem_permissao(Permissao.REALIZAR_EMPRESTIMO):
             raise PermissaoNegadaError()
 
         if hasattr(self.emprestimo_repository, "realizar_emprestimo"):
-            return self.emprestimo_repository.realizar_emprestimo(livro, usuario)
+            return self.emprestimo_repository.realizar_emprestimo(livro, usuario, data_prevista_devolucao)
 
         emprestimo = Emprestimo(livro, usuario)
+        emprestimo.data_prevista_devolucao = data_prevista_devolucao
         emprestimo.realizar()
         self.emprestimo_repository.salvar(emprestimo)
         return emprestimo

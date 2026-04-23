@@ -113,6 +113,12 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF @DataPrevistaDevolucao IS NULL
+        THROW 51007, 'Informe a data prevista de devolução.', 1;
+
+    IF @DataPrevistaDevolucao < CAST(GETDATE() AS DATE)
+        THROW 51008, 'Data prevista de devolução não pode estar no passado.', 1;
+
     DECLARE @LivroId INT;
     DECLARE @UsuarioId INT;
     DECLARE @EmprestimoId INT;
@@ -138,8 +144,8 @@ BEGIN
         THROW 51006, 'Livro já está emprestado.', 1;
     END
 
-    INSERT INTO dbo.Emprestimos (LivroId, UsuarioId, DataEmprestimo, DataDevolucao, Ativo)
-    VALUES (@LivroId, @UsuarioId, CAST(GETDATE() AS DATE), NULL, 1);
+    INSERT INTO dbo.Emprestimos (LivroId, UsuarioId, DataEmprestimo, DataPrevistaDevolucao, DataDevolucao, Ativo)
+    VALUES (@LivroId, @UsuarioId, CAST(GETDATE() AS DATE), @DataPrevistaDevolucao, NULL, 1);
 
     SET @EmprestimoId = CAST(SCOPE_IDENTITY() AS INT);
 

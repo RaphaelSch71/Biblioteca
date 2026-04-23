@@ -20,6 +20,7 @@ class Emprestimo:
             raise TypeError("Emprestimo espera (livro, usuario) ou (id, usuario, livro).")
 
         self.data_emprestimo = date.today()
+        self.data_prevista_devolucao = None
         self.data_devolucao = None
         self.ativo = True
     
