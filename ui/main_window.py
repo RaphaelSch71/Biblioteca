@@ -115,7 +115,8 @@ if QMainWindow is not object:
             self.setWindowTitle("BibliotecaBD | Painel Principal")
             self.setObjectName("MainWindow")
             self.resize(1360, 840)
-            self.setStyleSheet(APP_QSS)
+            app_qss = QApplication.instance().styleSheet() if QApplication.instance() else ""
+            self.setStyleSheet(app_qss or APP_QSS)
 
             root = QWidget()
             self.setCentralWidget(root)
@@ -329,8 +330,8 @@ if QMainWindow is not object:
             lay = QVBoxLayout(f); lay.setContentsMargins(22, 22, 22, 22); lay.setSpacing(14)
             h = QFrame(); h.setObjectName("Header")
             hl = QVBoxLayout(h); hl.setContentsMargins(20, 18, 20, 18)
-            ttl = QLabel(title); ttl.setStyleSheet("font-size: 20pt; font-weight: 700;")
-            sub = QLabel(subtitle); sub.setStyleSheet("color: #A8B5DD;"); sub.setWordWrap(True)
+            ttl = QLabel(title); ttl.setObjectName("PageTitle")
+            sub = QLabel(subtitle); sub.setObjectName("PageSubtitle"); sub.setWordWrap(True)
             hl.addWidget(ttl); hl.addWidget(sub); lay.addWidget(h)
             return f, lay
 

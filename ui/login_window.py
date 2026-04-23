@@ -12,33 +12,10 @@ except ImportError:  # pragma: no cover - interface gráfica opcional
     QVBoxLayout = QLabel = QLineEdit = QPushButton = None
 
 from services.auth_service import AuthService
-from ui.styles import APP_QSS
+from ui.styles import APP_QSS, LIGHT_QSS
 
 
-LOGIN_LIGHT_OVERRIDE_QSS = """
-QWidget#LoginWindow {
-    background: #EAF2FF;
-}
-
-QWidget#LoginWindow QFrame#LoginCard,
-QWidget#LoginWindow QFrame#LoginHero,
-QWidget#LoginWindow QFrame#LoginInfoPanel,
-QWidget#LoginWindow QFrame#LoginMediaCard {
-    background: #FFFFFF;
-    border: 1px solid #C7D6F7;
-}
-
-QWidget#LoginWindow QLabel {
-    color: #102A56;
-}
-
-QWidget#LoginWindow QLineEdit,
-QWidget#LoginWindow QComboBox {
-    background: #F8FBFF;
-    color: #102A56;
-    border: 1px solid #AFC3EF;
-}
-"""
+LOGIN_LIGHT_OVERRIDE_QSS = LIGHT_QSS
 
 
 if QWidget is not object:
@@ -474,11 +451,17 @@ if QWidget is not object:
         def _acao_tema_noturno(self):
             self._tema_noturno_ativo = not self._tema_noturno_ativo
 
+            app = QApplication.instance()
+
             if self._tema_noturno_ativo:
+                if app is not None:
+                    app.setStyleSheet(APP_QSS)
                 self.setStyleSheet(APP_QSS)
                 self.status.setText("Tema noturno ativado.")
             else:
-                self.setStyleSheet(APP_QSS + "\n" + LOGIN_LIGHT_OVERRIDE_QSS)
+                if app is not None:
+                    app.setStyleSheet(LIGHT_QSS)
+                self.setStyleSheet(LIGHT_QSS)
                 self.status.setText("Tema claro ativado.")
 
         def _acao_sql_server(self):
